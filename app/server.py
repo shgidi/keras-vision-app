@@ -31,10 +31,10 @@ async def download_file(url, dest):
 
 async def setup_model():
     #UNCOMMENT HERE FOR CUSTOM TRAINED MODEL
-    # await download_file(model_file_url, MODEL_PATH)
-    # model = load_model(MODEL_PATH) # Load your Custom trained model
-    # model._make_predict_function()
-    model = ResNet50(weights='imagenet') # COMMENT, IF you have Custom trained model
+    await download_file(model_file_url, MODEL_PATH)
+    model = load_model(MODEL_PATH) # Load your Custom trained model
+    model._make_predict_function()
+    # model = ResNet50(weights='imagenet') # COMMENT, IF you have Custom trained model
     return model
 
 # Asynchronous Steps
@@ -54,9 +54,12 @@ async def upload(request):
 def model_predict(img_path, model):
     result = []; img = image.load_img(img_path, target_size=(224, 224))
     x = preprocess_input(np.expand_dims(image.img_to_array(img), axis=0))
-    predictions = decode_predictions(model.predict(x), top=3)[0] # Get Top-3 Accuracy
-    for p in predictions: _,label,accuracy = p; result.append((label,accuracy))
-    with open(PREDICTION_FILE_SRC, 'w') as f: f.write(str(result))
+    # predictions = decode_predictions(model.predict(x), top=3)[0] # Get Top-3 Accuracy
+    predictions = model.predict(x)
+    class_dict = {0:"class1", 1:"class2"} # currenlty only binary
+    result = class_dict[np.argmax(predictions[0], axis =1)]
+    # for p in predictions: _,label,accuracy = p; result.append((label,accuracy))
+    with open(PREDICTION_FILE_SRC, 'w') as f: f.write("the iamge is more "+str(result)+" confidence"+np.max(preidctions[0]))
     result_html = path/'static'/'result.html'
     return HTMLResponse(result_html.open().read())
 
@@ -66,4 +69,4 @@ def form(request):
     return HTMLResponse(index_html.open().read())
 
 if __name__ == "__main__":
-    if "serve" in sys.argv: uvicorn.run(app, host="0.0.0.0", port=8080)
+    if "serve" in sys.argv: uvicorn.run(app, host="0.0.0.0", port=8081)
