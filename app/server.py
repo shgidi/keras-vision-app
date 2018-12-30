@@ -9,11 +9,16 @@ from starlette.middleware.cors import CORSMiddleware
 from pathlib import Path
 import uvicorn, aiohttp, asyncio
 import base64, sys, numpy as np
+import os
+
 
 path = Path(__file__).parent
-model_file_url = 'YOUR MODEL.h5 DIRECT / RAW DOWNLOAD URL HERE!'
+model_file_url = ''#'YOUR MODEL.h5 DIRECT / RAW DOWNLOAD URL HERE!'
+dl_type = 'gdrive' # | 'raw','gdrive'
 model_file_name = 'model'
-
+with open('config.json') as f:
+    config = json.load(f)
+    
 app = Starlette()
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_headers=['X-Requested-With', 'Content-Type'])
 app.mount('/static', StaticFiles(directory='app/static'))
@@ -30,9 +35,19 @@ async def download_file(url, dest):
             with open(dest, 'wb') as f: f.write(data)
 
 async def setup_model():
-    #UNCOMMENT HERE FOR CUSTOM TRAINED MODEL
-    await download_file(model_file_url, MODEL_PATH)
-    model = load_model(MODEL_PATH) # Load your Custom trained model
+    #UNCOMMENT HERE FOR CUSTOM TRAINED 
+    if dl_type == 'raw':
+        await download_file(model_file_url, MODEL_PATH)
+    elif dl_type == 'gdrive':
+        from google.cloud import storage
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = config['gdrive_key']
+        storage_client = storage.Client()
+        bucket_name = 'my-new-bucket-ssss'
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob('test')
+        blob.download_to_filename(MODEL_PATH)
+
+    model = load_model(str(MODEL_PATH)) # Load your Custom trained model
     model._make_predict_function()
     # model = ResNet50(weights='imagenet') # COMMENT, IF you have Custom trained model
     return model
