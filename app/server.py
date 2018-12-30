@@ -10,15 +10,22 @@ from pathlib import Path
 import uvicorn, aiohttp, asyncio
 import base64, sys, numpy as np
 import os
-
+import json
 
 path = Path(__file__).parent
 model_file_url = ''#'YOUR MODEL.h5 DIRECT / RAW DOWNLOAD URL HERE!'
 dl_type = 'gdrive' # | 'raw','gdrive'
 model_file_name = 'model'
+
+'''
+config.json example:
+    {"gdrive_key":"project.json",
+    "bucket_path":"best_model.hdf5",
+    "classes":["fake","genuine"] } # can include n classes
+'''
 with open('config.json') as f:
     config = json.load(f)
-    
+
 app = Starlette()
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_headers=['X-Requested-With', 'Content-Type'])
 app.mount('/static', StaticFiles(directory='app/static'))
@@ -38,13 +45,13 @@ async def setup_model():
     #UNCOMMENT HERE FOR CUSTOM TRAINED 
     if dl_type == 'raw':
         await download_file(model_file_url, MODEL_PATH)
-    elif dl_type == 'gdrive':
+    elif dl_type == 'gdrive' and not MODEL_PATH.exists():
         from google.cloud import storage
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = config['gdrive_key']
         storage_client = storage.Client()
         bucket_name = 'my-new-bucket-ssss'
         bucket = storage_client.get_bucket(bucket_name)
-        blob = bucket.blob('test')
+        blob = bucket.blob(config['bucket_path'])
         blob.download_to_filename(MODEL_PATH)
 
     model = load_model(str(MODEL_PATH)) # Load your Custom trained model
@@ -71,10 +78,12 @@ def model_predict(img_path, model):
     x = preprocess_input(np.expand_dims(image.img_to_array(img), axis=0))
     # predictions = decode_predictions(model.predict(x), top=3)[0] # Get Top-3 Accuracy
     predictions = model.predict(x)
-    class_dict = {0:"class1", 1:"class2"} # currenlty only binary
-    result = class_dict[np.argmax(predictions[0], axis =1)]
+    classes = config['classes']
+    class_dict = {i:j for i,j in enumerate(classes)} # currenlty only binary
+    print(predictions)
+    result = class_dict[np.argmax(predictions[0])]
     # for p in predictions: _,label,accuracy = p; result.append((label,accuracy))
-    with open(PREDICTION_FILE_SRC, 'w') as f: f.write("the iamge is more "+str(result)+" confidence"+np.max(preidctions[0]))
+    with open(PREDICTION_FILE_SRC, 'w') as f: f.write("the image is more "+str(result)+" confidence"+str(np.max(predictions[0])))
     result_html = path/'static'/'result.html'
     return HTMLResponse(result_html.open().read())
 
@@ -84,4 +93,4 @@ def form(request):
     return HTMLResponse(index_html.open().read())
 
 if __name__ == "__main__":
-    if "serve" in sys.argv: uvicorn.run(app, host="0.0.0.0", port=8081)
+    if "serve" in sys.argv: uvicorn.run(app, host="0.0.0.0", port=8081, debug=True)
